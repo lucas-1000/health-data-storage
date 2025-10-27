@@ -1,6 +1,10 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { Database, HealthSample } from './database.js';
+import { FoodDatabase } from './food-database.js';
+import { OpenAIAnalyzer } from './openai-analyzer.js';
+import { PhotoStorage } from './storage.js';
+import { createFoodRoutes } from './food-routes.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -13,6 +17,13 @@ app.use(express.json({ limit: '10mb' }));
 
 // Initialize database
 const db = new Database(process.env.DATABASE_URL || '');
+const foodDb = new FoodDatabase(db['pool']); // Access the pool from Database class
+
+// Initialize OpenAI analyzer
+const analyzer = new OpenAIAnalyzer(process.env.OPENAI_API_KEY || '');
+
+// Initialize photo storage
+const storage = new PhotoStorage(process.env.PHOTO_BUCKET || 'health-photos');
 
 /**
  * Authentication middleware
@@ -54,6 +65,7 @@ app.get('/health', (req: Request, res: Response) => {
  *       "startDate": "2025-10-22T10:30:00Z",
  *       "endDate": "2025-10-22T10:30:00Z",
  *       "source": "Lingo",
+ *       "localTimezone": "America/Los_Angeles",
  *       "metadata": {}
  *     }
  *   ]
@@ -80,6 +92,7 @@ app.post('/api/samples', authenticateRequest, async (req: Request, res: Response
       start_date: new Date(sample.startDate),
       end_date: new Date(sample.endDate),
       source: sample.source || 'Unknown',
+      local_timezone: sample.localTimezone || null,
       metadata: sample.metadata,
     }));
 
@@ -184,6 +197,11 @@ app.get('/api/samples/stats', authenticateRequest, async (req: Request, res: Res
   }
 });
 
+/**
+ * Food logging routes
+ */
+app.use('/api/food', authenticateRequest, createFoodRoutes(foodDb, analyzer, storage));
+
 // 404 handler
 app.use((req: Request, res: Response) => {
   res.status(404).json({ error: 'Not found' });
@@ -204,13 +222,27 @@ async function start() {
     await db.initialize();
     console.log('✅ Database initialized');
 
+    // Initialize food database
+    await foodDb.initialize();
+    console.log('✅ Food database initialized');
+
     app.listen(PORT, () => {
       console.log(`🚀 Health Data Storage API listening on port ${PORT}`);
       console.log(`📊 Health check: http://localhost:${PORT}/health`);
-      console.log(`📥 POST /api/samples - Store health samples`);
-      console.log(`📤 GET  /api/samples - Query health samples`);
-      console.log(`📤 GET  /api/samples/latest - Get latest sample`);
-      console.log(`📊 GET  /api/samples/stats - Get statistics`);
+      console.log('');
+      console.log('📥 Health Samples:');
+      console.log(`   POST /api/samples - Store health samples`);
+      console.log(`   GET  /api/samples - Query health samples`);
+      console.log(`   GET  /api/samples/latest - Get latest sample`);
+      console.log(`   GET  /api/samples/stats - Get statistics`);
+      console.log('');
+      console.log('🍽️  Food Logging:');
+      console.log(`   POST /api/food/analyze - Analyze food photo`);
+      console.log(`   POST /api/food/log - Log a meal`);
+      console.log(`   GET  /api/food - Query meals`);
+      console.log(`   GET  /api/food/summary/daily - Get daily summary`);
+      console.log(`   PUT  /api/food/:id - Update meal`);
+      console.log(`   DELETE /api/food/:id - Delete meal`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);

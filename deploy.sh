@@ -32,6 +32,20 @@ if [ -z "$DATABASE_URL" ]; then
   exit 1
 fi
 
+# Check if OPENAI_API_KEY is set
+if [ -z "$OPENAI_API_KEY" ]; then
+  echo "❌ Error: OPENAI_API_KEY environment variable is not set"
+  echo "Get your API key from https://platform.openai.com/api-keys"
+  exit 1
+fi
+
+# Check if PHOTO_BUCKET is set
+if [ -z "$PHOTO_BUCKET" ]; then
+  echo "❌ Error: PHOTO_BUCKET environment variable is not set"
+  echo "Example: health-photos-your-project-id"
+  exit 1
+fi
+
 # Build and deploy
 echo "📦 Building container..."
 gcloud builds submit --tag gcr.io/$PROJECT_ID/$SERVICE_NAME
@@ -42,11 +56,12 @@ gcloud run deploy $SERVICE_NAME \
   --platform managed \
   --region $REGION \
   --allow-unauthenticated \
-  --set-env-vars="NODE_ENV=production,DATABASE_URL=$DATABASE_URL,API_SECRET=$API_SECRET" \
+  --set-env-vars="NODE_ENV=production,DATABASE_URL=$DATABASE_URL,API_SECRET=$API_SECRET,OPENAI_API_KEY=$OPENAI_API_KEY,PHOTO_BUCKET=$PHOTO_BUCKET" \
   --memory=512Mi \
   --cpu=1 \
   --timeout=300 \
-  --max-instances=10
+  --max-instances=10 \
+  --add-cloudsql-instances=personal-assistant-e4351:us-central1:health-data-db
 
 echo "✅ Deployment complete!"
 echo ""

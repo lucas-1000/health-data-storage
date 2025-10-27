@@ -9,6 +9,7 @@ export interface HealthSample {
   start_date: Date;
   end_date: Date;
   source: string;
+  local_timezone?: string; // e.g., "America/Los_Angeles" or offset like "-07:00"
   metadata?: any;
   created_at?: Date;
 }
@@ -61,10 +62,22 @@ export class Database {
           start_date TIMESTAMPTZ NOT NULL,
           end_date TIMESTAMPTZ NOT NULL,
           source VARCHAR(255),
+          local_timezone VARCHAR(50),
           metadata JSONB,
           created_at TIMESTAMPTZ DEFAULT NOW(),
           UNIQUE(user_id, type, start_date, source)
         );
+
+        -- Add local_timezone column if it doesn't exist (for existing databases)
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'health_samples' AND column_name = 'local_timezone'
+          ) THEN
+            ALTER TABLE health_samples ADD COLUMN local_timezone VARCHAR(50);
+          END IF;
+        END $$;
 
         CREATE INDEX IF NOT EXISTS idx_health_samples_user_id ON health_samples(user_id);
         CREATE INDEX IF NOT EXISTS idx_health_samples_type ON health_samples(type);
@@ -91,8 +104,8 @@ export class Database {
       for (const sample of samples) {
         const result = await client.query(
           `
-          INSERT INTO health_samples (user_id, type, value, unit, start_date, end_date, source, metadata)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          INSERT INTO health_samples (user_id, type, value, unit, start_date, end_date, source, local_timezone, metadata)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
           ON CONFLICT (user_id, type, start_date, source) DO NOTHING
           RETURNING id
           `,
@@ -104,6 +117,7 @@ export class Database {
             sample.start_date,
             sample.end_date,
             sample.source,
+            sample.local_timezone || null,
             sample.metadata ? JSON.stringify(sample.metadata) : null,
           ]
         );
