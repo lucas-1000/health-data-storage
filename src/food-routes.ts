@@ -144,12 +144,12 @@ export function createFoodRoutes(
   /**
    * Update a meal (manual corrections)
    * PUT /api/food/:mealId
-   * Body: { macros?: {...}, notes?: string }
+   * Body: { macros?: {...}, notes?: string, foods?: string[], mealType?: string }
    */
   router.put('/:mealId', async (req: Request, res: Response) => {
     try {
       const mealId = parseInt(req.params.mealId);
-      const { macros, notes } = req.body;
+      const { macros, notes, foods, mealType } = req.body;
 
       const updates: any = {
         manual_override: true,
@@ -164,6 +164,14 @@ export function createFoodRoutes(
 
       if (notes !== undefined) {
         updates.notes = notes;
+      }
+
+      if (foods !== undefined) {
+        updates.foods = foods;
+      }
+
+      if (mealType !== undefined) {
+        updates.meal_type = mealType;
       }
 
       const updated = await foodDb.updateFoodLog(mealId, updates);
